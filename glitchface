@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <title>Glitch Face NFT</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: black;
+      font-family: sans-serif;
+    }
+
+    canvas {
+      display: block;
+    }
+
+    #fullscreenBtn {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 10;
+      background: rgba(0, 0, 0, 0.7);
+      color: cyan;
+      border: 1px solid cyan;
+      padding: 8px 12px;
+      cursor: pointer;
+      font-size: 14px;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <button id="fullscreenBtn">⛶ Fullscreen</button>
+
+  <!-- Librerie -->
+  <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/ml5@0.12.2/dist/ml5.min.js"></script>
+
+  <script>
+    let video;
+    let faceMesh;
+    let predictions = [];
+    let particles = [];
+
+    function setup() {
+      createCanvas(windowWidth, windowHeight);
+      video = createCapture(VIDEO);
+      video.size(width, height);
+      video.hide();
+
+      faceMesh = ml5.facemesh(video, modelReady);
+      faceMesh.on("predict", results => {
+        predictions = results;
+      });
+
+      for (let i = 0; i < 468; i++) {
+        particles.push({
+          pos: createVector(random(width), random(height)),
+          vel: createVector(0, 0),
+          acc: createVector(0, 0),
+          target: createVector(width / 2, height / 2)
+        });
+      }
+
+      // Bottone fullscreen
+      document.getElementById("fullscreenBtn").addEventListener("click", () => {
+        let fsEl = document.documentElement;
+        if (!document.fullscreenElement) {
+          fsEl.requestFullscreen().catch(err => console.log(err));
+        } else {
+          document.exitFullscreen();
+        }
+      });
+    }
+
+    function modelReady() {
+      console.log("FaceMesh pronto!");
+    }
+
+    function draw() {
+      background(0, 40); // scia glitch
+
+      let mouthOpen = 0;
+
+      if (predictions.length > 0) {
+        const keypoints = predictions[0].scaledMesh;
+        const topLip = keypoints[62];
+        const bottomLip = keypoints[66];
+        mouthOpen = dist(topLip[0], topLip[1], bottomLip[0], bottomLip[1]);
+
+        for (let i = 0; i < keypoints.length; i++) {
+          let [x, y] = keypoints[i];
+          particles[i].target.set(x, y);
+        }
+      }
+
+      const mouthRatio = map(mouthOpen, 0, 30, 0, 1);
+      const isTalking = mouthRatio > 0.2;
+
+      for (let i = 0; i < particles.length; i++) {
+        let p = particles[i];
+
+        let force = p5.Vector.sub(p.target, p.pos);
+        let dista = force.mag();
+        let strength = map(dista, 0, width, 0.3, 0.01);
+        force.setMag(strength);
+
+        p.acc.add(force);
+        p.vel.add(p.acc);
+        p.vel.mult(0.9);
+        p.pos.add(p.vel);
+        p.acc.mult(0);
+
+        let size = isTalking && i >= 61 && i <= 67 ? 6 : 4;
+        let alpha = map(dista, 0, 200, 200, 0);
+
+        noStroke();
+
+        fill(0, 255, 255, alpha);
+        rect(p.pos.x + random(-1, 1), p.pos.y + random(-1, 1), size, size * 1.5);
+
+        fill(255, 0, 0, alpha * 0.5);
+        rect(p.pos.x + 2, p.pos.y, size, size * 1.5);
+
+        fill(0, 255, 0, alpha * 0.5);
+        rect(p.pos.x - 2, p.pos.y, size, size * 1.5);
+      }
+    }
+
+    function windowResized() {
+      resizeCanvas(windowWidth, windowHeight);
+    }
+  </script>
+</body>
+</html>
